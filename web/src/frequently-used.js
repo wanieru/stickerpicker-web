@@ -13,7 +13,7 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-const FREQUENTLY_USED = JSON.parse(window.localStorage.mauFrequentlyUsedStickerIDs || "{}")
+let FREQUENTLY_USED = JSON.parse(window.localStorage.mauFrequentlyUsedStickerIDs || "{}")
 let FREQUENTLY_USED_SORTED = null
 
 export const add = id => {
@@ -31,4 +31,10 @@ export const get = (limit = 16) => {
 			.map(([emoji]) => emoji)
 	}
 	return FREQUENTLY_USED_SORTED.slice(0, limit)
+}
+export const clear = () => {
+	FREQUENTLY_USED = {};
+	FREQUENTLY_USED_SORTED = null;
+	window.localStorage.mauFrequentlyUsedStickerIDs = "{}";
+	window.localStorage.mauFrequentlyUsedStickerCache = "[]";
 }

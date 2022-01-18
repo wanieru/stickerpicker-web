@@ -21,12 +21,15 @@ import * as frequent from "./frequently-used.js"
 
 // The base URL for fetching packs. The app will first fetch ${PACK_BASE_URL}/index.json,
 // then ${PACK_BASE_URL}/${packFile} for each packFile in the packs object of the index.json file.
-const PACKS_BASE_URL = "packs"
+const params = new URLSearchParams(document.location.search)
+
+let PACKS_BASE_URL = "packs"
+if(params.has("url"))
+	PACKS_BASE_URL = params.get("url");
 
 let INDEX = `${PACKS_BASE_URL}/index.json`
-const params = new URLSearchParams(document.location.search)
 if (params.has('config')) {
-	INDEX = params.get("config")
+	INDEX = `${PACKS_BASE_URL}/${params.get("config")}.json`;
 }
 // This is updated from packs/index.json
 let HOMESERVER_URL = "https://matrix-client.matrix.org"
@@ -151,38 +154,57 @@ class App extends Component {
 		})
 		this._loadPacks(true)
 	}
+	clearFrequentlyUsed = () => {
+		frequent.clear();
+		this.updateFrequentlyUsed();
+	}
 
 	_loadPacks(disableCache = false) {
 		const cache = disableCache ? "no-cache" : undefined
-		fetch(INDEX, { cache }).then(async indexRes => {
-			if (indexRes.status >= 400) {
-				this.setState({
-					loading: false,
-					error: indexRes.status !== 404 ? indexRes.statusText : null,
-				})
-				return
-			}
-			const indexData = await indexRes.json()
-			HOMESERVER_URL = indexData.homeserver_url || HOMESERVER_URL
-			// TODO only load pack metadata when scrolled into view?
-			for (const packFile of indexData.packs) {
-				let packRes
-				if (packFile.startsWith("https://") || packFile.startsWith("http://")) {
-					packRes = await fetch(packFile, { cache })
-				} else {
-					packRes = await fetch(`${PACKS_BASE_URL}/${packFile}`, { cache })
+		const fetched = [];
+		const processIndex = index => 
+		{
+			if(fetched.includes(index))
+				return;
+			fetched.push(index);
+			return fetch(index, { cache }).then(async indexRes => {
+				if (indexRes.status >= 400) {
+					this.setState({
+						loading: false,
+						error: indexRes.status !== 404 ? indexRes.statusText : null,
+					})
+					return
 				}
-				const packData = await packRes.json()
-				for (const sticker of packData.stickers) {
-					this.stickersByID.set(sticker.id, sticker)
+				const indexData = await indexRes.json()
+				HOMESERVER_URL = indexData.homeserver_url || HOMESERVER_URL
+				// TODO only load pack metadata when scrolled into view?
+				for (const packFile of indexData.packs) {
+					let packRes
+					if (packFile.startsWith("https://") || packFile.startsWith("http://")) {
+						packRes = await fetch(packFile, { cache })
+					} else {
+						packRes = await fetch(`${PACKS_BASE_URL}/${packFile}`, { cache })
+					}
+					const packData = await packRes.json()
+					for (const sticker of packData.stickers) {
+						this.stickersByID.set(sticker.id, sticker)
+					}
+					this.setState({
+						packs: [...this.state.packs, packData],
+						loading: false,
+					})
 				}
-				this.setState({
-					packs: [...this.state.packs, packData],
-					loading: false,
-				})
-			}
-			this.updateFrequentlyUsed()
-		}, error => this.setState({ loading: false, error }))
+				if(indexData.hasOwnProperty("links"))
+				{
+					for(const link of indexData.links)
+					{
+						await processIndex(link);
+					}
+				}
+				this.updateFrequentlyUsed()
+			}, error => this.setState({ loading: false, error }));
+		};
+		processIndex(INDEX);
 	}
 
 	componentDidMount() {
@@ -302,6 +324,7 @@ const Settings = ({ app }) => html`
 		<h1>Settings</h1>
 		<div class="settings-list">
 			<button onClick=${app.reloadPacks}>Reload</button>
+			<button onClick=${app.clearFrequentlyUsed}>Clear frequently used</button>
 			<div>
 				<label for="stickers-per-row">Stickers per row: ${app.state.stickersPerRow}</label>
 				<input type="range" min=2 max=10 id="stickers-per-row" id="stickers-per-row"
