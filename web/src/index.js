@@ -183,7 +183,7 @@ class App extends Component {
 					if (packFile.startsWith("https://") || packFile.startsWith("http://")) {
 						packRes = await fetch(packFile, { cache })
 					} else {
-						packRes = await fetch(`${PACKS_BASE_URL}/${packFile}`, { cache })
+						packRes = await fetch(index.replace("index.json", packFile), { cache });
 					}
 					const packData = await packRes.json()
 					for (const sticker of packData.stickers) {
